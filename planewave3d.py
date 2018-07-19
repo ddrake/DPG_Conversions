@@ -11,13 +11,13 @@ from math import pi
 from numpy import log
 from ctypes import CDLL
 
-libDPG = CDLL("../../libDPG.so")
+libDPG = CDLL("../libDPG.so")
 
 #ngsglobals.msg_level = 1
 
-geo = CSGeometry("../../pde/cube6bc.geo")
+geo = CSGeometry("../pde/cube6bc.geo")
 
-mesh = Mesh("../../pde/cube6bc4.vol.gz")
+mesh = Mesh("../pde/cube6bc4.vol.gz")
 
 SetHeapSize(int(1e7))
 
@@ -88,7 +88,7 @@ fs1 = L2(mesh, order=6,complex=True) 		# e, v, deg p+2
 fs2 = H1(mesh, order=5,complex=True) 		# u, w, deg p+1
 fs3 = HDiv(mesh, order=4,complex=True,
 	flags={"orderinner":1})  		# q, r, deg p 
-fs = FESpace([fs1,fs2,fs3], flags={"complex":True})
+fs = FESpace([fs1,fs2,fs3], complex=True)
 
 # forms 
 lf = LinearForm(fs)
@@ -101,7 +101,7 @@ lf.components[1] += LFI("neumann", coef=minusgik) 	# +<g,ik*wh> = -<g*ik,wh>
 #   Y(e;v)  +  b(u,q,uh; v) + conj( b(w,r,wh; e) +  c(w,r,wh ; u,q,uh) )
 
 # The symmetric=False option is necessary for Hermitian too.
-dpg = BilinearForm(fs, symmetric=False, flags={"linearform": lf, "eliminate_internal":True})
+dpg = BilinearForm(fs, symmetric=False, linearform=lf, eliminate_internal=True)
 dpg += BFI("gradgrad", 		coef=[2,1,one]) 	# (grad u, grad v)
 dpg += BFI("eyeeye", 		coef=[2,1,minusksqr])	# - k*k*(u,v) 
 dpg += BFI("flxtrc", 		coef=[3,1,minus])	# - <<q.n, v>> 

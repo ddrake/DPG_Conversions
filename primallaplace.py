@@ -32,12 +32,12 @@ from math import pi
 from numpy import log
 from ctypes import CDLL
 
-libDPG = CDLL("../../libDPG.so")
+libDPG = CDLL("../libDPG.so")
 
 ngsglobals.msg_level = 1
 
-geo = SplineGeometry("../../pde/square.in2d")
-mesh = Mesh("../../pde/square2.vol.gz")
+geo = SplineGeometry("../pde/square.in2d")
+mesh = Mesh("../pde/square2.vol.gz")
 # Just set this if we need to?
 SetHeapSize(int(1e7))
 one = CoefficientFunction(1)
@@ -58,7 +58,7 @@ fs = FESpace([fs1,fs2,fs3])
 
 # Forms: Specify a dpg integrator operating on component 
 # spaces I and J as:   <integrator name> <I> <J> <coeff>.
-dpg = BilinearForm(fs, symmetric=True, flags = { "eliminate_internal" : True })
+dpg = BilinearForm(fs, symmetric=True, eliminate_internal=True)
 dpg += BFI("gradgrad", coef=[1,3,one])
 dpg += BFI("flxtrc", coef=[2,3,minus])
 dpg += BFI("eyeeye", coef=[1,3,one])

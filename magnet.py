@@ -4,12 +4,12 @@ from math import pi
 from numpy import log
 from ctypes import CDLL
 
-libDPG = CDLL("../../libDPG.so")
+libDPG = CDLL("../libDPG.so")
 
 ngsglobals.msg_level = 1
 
-geo = CSGeometry("../../pde/magnet.geo")
-mesh = Mesh("../../pde/magnet.vol.gz")
+geo = CSGeometry("../pde/magnet.geo")
+mesh = Mesh("../pde/magnet.vol.gz")
 
 geometryorder = 3
 
@@ -25,7 +25,7 @@ v = Periodic(HCurl(mesh, order=3, dirichlet=[1]))
 u = GridFunction(v)
 #define gridfunction u -fespace=v 
 
-a = BilinearForm(v, symmetric=True, flags={"spd": True})
+a = BilinearForm(v, symmetric=True, symmetric=True, spd=True)
 #define bilinearform a -fespace=v -symmetric -spd
 a += BFI("curlcurledge",coef=(1.0))
 a += BFI("massedge",coef=(0.001))
@@ -39,7 +39,7 @@ c.Update()
 
 BVP(bf=a, lf=f, gf=u, pre=c)
 
-acurl = BilinearForm(v, symmetric=True, flags={"nonassemble":True})
+acurl = BilinearForm(v, symmetric=True, nonassemble=True)
 acurl += BFI("curlcurledge", coef=(1.0))
 
 DrawFlux(bf=acurl,gf=u,label="flux")

@@ -34,12 +34,12 @@ from math import pi
 from numpy import log
 from ctypes import CDLL
 
-libDPG = CDLL("../../libDPG.so")
+libDPG = CDLL("../libDPG.so")
 
 ngsglobals.msg_level = 1
 
-geo = SplineGeometry("../../pde/square4bdry.in2d")
-mesh = Mesh("../../pde/square4bdry4.vol.gz")
+geo = SplineGeometry("../pde/square4bdry.in2d")
+mesh = Mesh("../pde/square4bdry4.vol.gz")
 
 # Just set this if we need to?
 SetHeapSize(int(1e7))

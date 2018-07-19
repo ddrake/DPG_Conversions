@@ -6,12 +6,12 @@ from math import pi
 from numpy import log
 from ctypes import CDLL
 
-libDPG = CDLL("../../libDPG.so")
+libDPG = CDLL("../libDPG.so")
 
 ngsglobals.msg_level = 1
 
-geo = SplineGeometry("../../pde/square.in2d")
-mesh = Mesh("../../pde/square2.vol.gz")
+geo = SplineGeometry("../pde/square.in2d")
+mesh = Mesh("../pde/square2.vol.gz")
 SetHeapSize(int(1e7))
 one = CoefficientFunction(1)
 minus = CoefficientFunction(-1.0)
@@ -26,10 +26,10 @@ fs2 = HDiv(mesh, order=3, complex=True,
 	flags={ "orderinner": 1})	# p
 fs3 = L2(mesh, order=5, complex=True)	# p+2
 
-fs = FESpace([fs1,fs2,fs3], flags={"complex":True})
+fs = FESpace([fs1,fs2,fs3], complex=True)
 
 # Forms:
-dpg = BilinearForm(fs, flags = { "eliminate_internal" : True })
+dpg = BilinearForm(fs, eliminate_internal=True)
 dpg += BFI("gradgrad", coef=[1,3,lam])  # (grad u, grad v) + Hermitian transpose 
 dpg += BFI("flxtrc", coef=[2,3,minus])  # - << q.n, v >>   + Hermitian transpose
 dpg.components[2] += BFI("laplace", coef=one)  	# (grad e, grad v)

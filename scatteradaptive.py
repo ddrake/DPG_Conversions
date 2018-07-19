@@ -29,12 +29,12 @@ from math import pi
 from numpy import log
 from ctypes import CDLL
 
-libDPG = CDLL("../../libDPG.so")
+libDPG = CDLL("../libDPG.so")
 
 ngsglobals.msg_level = 1
 
-geo = SplineGeometry("../../pde/triangularscatterer.in2d")
-mesh = Mesh("../../pde/triangularscatterer.vol.gz")
+geo = SplineGeometry("../pde/triangularscatterer.in2d")
+mesh = Mesh("../pde/triangularscatterer.vol.gz")
 
 # Just set this if we need to?
 SetHeapSize(int(1e7))
@@ -87,11 +87,9 @@ inc = CoefficientFunction([ 0,0,0,0,-penalty * exp(1j*(kc*x + ks*y))])
 # Finite element spaces                              (p = 0,1,2,...)
 fs1 = L2(mesh, order=4, complex=True)  # e, v, deg p+2
 fs2 = L2(mesh, order=3, complex=True)  # u, w, deg p+1
-fs3 = HDiv(mesh, order=2, complex=True, 
-		flags={"orderinner":True})  # q, r, deg p 
-fs4 = H1(mesh, order=3, complex=True,
-		flags={"orderinner":True})     # uh, wh, deg p+1
-fs  = FESpace([fs1,fs2,fs3,fs4], flags={"complex":True})
+fs3 = HDiv(mesh, order=2, complex=True, orderinner=True)  # q, r, deg p 
+fs4 = H1(mesh, order=3, complex=True, orderinner=True)     # uh, wh, deg p+1
+fs  = FESpace([fs1,fs2,fs3,fs4], complex=True)
 
 # Forms 
 #   RHS:
@@ -99,7 +97,7 @@ lf = LinearForm(fs)
 lf.components[3] += LFI("neumann", coef=inc)  # - penalty <uincident, v> 
 
 #   LHS:
-dpg = BilinearForm(fs, flags={"linearform":lf, "nonsym":True, "eliminate_internal":True})
+dpg = BilinearForm(fs, linearform=lf, nonsym=True, eliminate_internal=True)
 dpg += BFI("gradgrad", coef=[2,1,one])            # (grad u, grad v)
 dpg += BFI("eyeeye", coef=[2,1,minusksqr])        # - k*k*(u,v) 
 dpg += BFI("flxtrc", coef=[3,1,minus])            # - <<q.n, v>> 
