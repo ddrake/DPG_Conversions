@@ -31,6 +31,7 @@ from netgen.geom2d import SplineGeometry
 from math import pi
 from numpy import log
 from ctypes import CDLL
+import ngsolve.internal as ngint
 
 libDPG = CDLL("../libDPG.so")
 
@@ -123,6 +124,7 @@ qex.Set(graduex) # Interp/proj exact Q=graduex.
 qRT.Set(q) # Interp/proj q to RT space (here we need q treated as coefficient)
 
 Draw(u)
+ngint.visoptions.subdivisions=4
 #numproc fluxerr  calc_fluxerror_fracnorm  # Calculate ||q - Q||.
 #	-exactq=qex -discreteq=qRT -extensionspace=RT 
 #	-fespace=fs -hdivproduct=hdivipe -errorsquareq=qerrsqr  
