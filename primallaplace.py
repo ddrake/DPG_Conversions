@@ -123,8 +123,8 @@ Draw(u)
 ngint.visoptions.subdivisions=4
 
 # TODO: can we bring the fluxerr numproc into Python?
-np = NumProc('fluxerr', exactq=qex, discreteq=qRT, extensionspace=RT,\
-        fespace=fs, hdivproduct=hdivipe, errorsquareq=qerrsqr)
+#np = NumProc('fluxerr', exactq=qex, discreteq=qRT, extensionspace=RT,\
+#        fespace=fs, hdivproduct=hdivipe, errorsquareq=qerrsqr)
 #numproc fluxerr  calc_fluxerror_fracnorm  # Calculate ||q - Q||.
 #	-exactq=qex -discreteq=qRT -extensionspace=RT 
 #	-fespace=fs -hdivproduct=hdivipe -errorsquareq=qerrsqr  
