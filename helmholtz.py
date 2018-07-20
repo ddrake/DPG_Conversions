@@ -96,8 +96,8 @@ minusik = CoefficientFunction(-1j*k)
 fs1 = L2(mesh, order=4,complex=True) 		# e, v, deg p+2
 fs2 = H1(mesh, order=3,complex=True)  		# u, w, deg p+1
 fs3 = HDiv(mesh, order=2,complex=True, 
-	flags={"orderinner":1}) 		# q, r, deg p
-fs = FESpace([fs1,fs2,fs3], flags={"complex":True})
+	orderinner=1) 		# q, r, deg p
+fs = FESpace([fs1,fs2,fs3], complex=True)
 
 lf = LinearForm(fs)
 lf.components[2] += LFI("neumannhdiv", coef=minusg) # -<g,r.n>
@@ -109,9 +109,7 @@ lf.components[1] += LFI("neumann", coef=minusgik)   # +<g,ik*wh> = -<g*ik,wh>
 #          = Y(e;v) + b(u,q; v)
 #                   + conj( b(w,r; e) +  c(w,r ; u,q) ).
 
-dpg = BilinearForm(fs, flags={"linearform": lf, 
-			      "symmetric": False, 
-			      "eliminate_internala": True} )
+dpg = BilinearForm(fs, linearform=lf, symmetric=False, eliminate_internal=True)
 
 dpg += BFI("gradgrad", coef=[2,1,one])
 dpg += BFI("eyeeye", coef=[2,1,minusksqr])
@@ -127,7 +125,7 @@ euq = GridFunction(fs)
 
 #c = Preconditioner(dpg, type="direct")
 #c = Preconditioner(dpg, type="local")
-#c = Preconditioner(dpg, type="vertexschwarz", flags={"addcoarse":True})
+#c = Preconditioner(dpg, type="vertexschwarz", addcoarse=True)
 c = Preconditioner(dpg, type="vertexschwarz")
 c.Update()
 

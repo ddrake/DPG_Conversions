@@ -87,7 +87,7 @@ f = CoefficientFunction(0.0)
 fs1 = L2(mesh, order=6,complex=True) 		# e, v, deg p+2
 fs2 = H1(mesh, order=5,complex=True) 		# u, w, deg p+1
 fs3 = HDiv(mesh, order=4,complex=True,
-	flags={"orderinner":1})  		# q, r, deg p 
+	orderinner=1)  		# q, r, deg p 
 fs = FESpace([fs1,fs2,fs3], complex=True)
 
 # forms 
@@ -116,7 +116,7 @@ euqf = GridFunction(fs)
 
 #c = Preconditioner(dpg, type="direct")
 #c = Preconditioner(dpg, type="local")
-#c = Preconditioner(dpg, type="vertexschwarz", flags={"addcoarse":True})
+#c = Preconditioner(dpg, type="vertexschwarz", addcoarse=True)
 c = Preconditioner(dpg, type="vertexschwarz")
 c.Update()
 

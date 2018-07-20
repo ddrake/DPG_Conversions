@@ -12,53 +12,67 @@ ngsglobals.msg_level = 1
 
 geo = SplineGeometry("../pde/square.in2d")
 mesh = Mesh("../pde/square2.vol.gz")
-SetHeapSize(int(1e7))
 one = CoefficientFunction(1)
-minus = CoefficientFunction(-1.0)
+minus = CoefficientFunction(-1)
 lam = CoefficientFunction(1+1j)
 
 # Source (exact solution unknown)
 f = CoefficientFunction( (1+1j)*exp( -100.0*(x*x+y*y) ) )
 
 # Compound finite element space:
-fs1 = H1(mesh, order=4, dirichlet=[1], complex=True)# p+1
-fs2 = HDiv(mesh, order=3, complex=True,
-	flags={ "orderinner": 1})	# p
-fs3 = L2(mesh, order=5, complex=True)	# p+2
+p = 3
+fs1 = H1(mesh, order=p+1, dirichlet=[1], complex=True)
+fs2 = HDiv(mesh, order=p, complex=True, orderinner=1)	
+fs3 = L2(mesh, order=p+2, complex=True)	
 
 fs = FESpace([fs1,fs2,fs3], complex=True)
 
 # Forms:
 dpg = BilinearForm(fs, eliminate_internal=True)
-dpg += BFI("gradgrad", coef=[1,3,lam])  # (grad u, grad v) + Hermitian transpose 
-dpg += BFI("flxtrc", coef=[2,3,minus])  # - << q.n, v >>   + Hermitian transpose
+dpg += BFI("gradgrad", coef=[1,3,lam])          # (grad u, grad v) + Hermitian transpose 
+dpg += BFI("flxtrc", coef=[2,3,minus])          # - << q.n, v >>   + Hermitian transpose
 dpg.components[2] += BFI("laplace", coef=one)  	# (grad e, grad v)
 dpg.components[2] += BFI("mass", coef=one)    	# (e,v) 
 
 lf = LinearForm(fs)
 lf.components[2] += LFI("source", coef=f)
 
-#gridfunction uqe -fespace=fs
-#numproc bvp n2 -bilinearform=dpg -linearform=lf 
-#        -gridfunction=uqe -solver=direct
-
-# Solve
-# gridfunction uqe -fespace=fs
-# numproc bvp n2 -bilinearform=dpg -linearform=lf 
-#        -gridfunction=uqe -solver=direct
-
 uqe = GridFunction(fs)
 
 c = Preconditioner(dpg, type="direct")
 
-# I think we want to do something like this from the Adaptive example in the docs
-def SolveBVP():
-	fes.Update()
-	uqe.Update()
-	dpg.Assemble()
-	f.Assemble()
-	inv = CGSolver(fes.mat, c.mat)
-	uqe.vec.data = inv * f.vec
+def Solve():
+    fes.Update()
+    uqe.Update()
+    dpg.Assemble()
+    lf.Assemble()
+    inv = CGSolver(dpg.mat, c.mat, precision=1.e-10, maxsteps=1000)
+    lf.vec.data += dpg.harmonic_extension_trans * lf.vec
+    uqe.vec.data = inv * lf.vec
+    uqe.vec.data += dpg.harmonic_extension * uqe.vec
+    uqe.vec.data += dpg.inner_solve * lf.vec
+
+l = []    # l = list of estimated total error
+
+def CalcError():
+    # compute the flux:
+    space_flux.Update()      
+    gf_flux.Update()
+    flux = lam * grad(gfu)        
+    gf_flux.Set(flux) 
+    
+    # TODO: Can we bring the enorms numproc into python?
+    # compute estimator:
+    err = 1/lam*(flux-gf_flux)*(flux-gf_flux)
+    eta2 = Integrate(err, mesh, VOL, element_wise=True)
+    maxerr = max(eta2)
+    l.append ((fes.ndof, sqrt(sum(eta2))))
+    print("ndof =", fes.ndof, " maxerr =", maxerr)
+    
+    # mark for refinement:
+    for el in mesh.Elements():
+        mesh.SetRefinementFlag(el, eta2[el.nr] > 0.25*maxerr)
+
 
 #def CalcError():
 	# todo: ??
