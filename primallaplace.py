@@ -86,6 +86,9 @@ c = Preconditioner(dpg,type="local")
 #n2 = BVP(bf=dpg, lf = lf, gf = uqe, pre=c, prec=1.e-10, maxsteps=1000).Do()
 dpg.Assemble()
 lf.Assemble()
+# I'm not sure if we can replace CGSolver by solvers.CG here
+# solvers.CG requires the right hand side vector which CGSolver does not.
+# It's not clear whether solvers.CG does the static condensation steps.
 inv = CGSolver(dpg.mat, c.mat, precision=1.e-10, maxsteps=1000)
 lf.vec.data += dpg.harmonic_extension_trans * lf.vec
 uqe.vec.data = inv * lf.vec
