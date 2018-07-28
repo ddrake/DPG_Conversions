@@ -43,7 +43,7 @@ geo = SplineGeometry("../pde/square4bdry.in2d")
 mesh = Mesh("../pde/square4bdry4.vol.gz")
 
 # Just set this if we need to?
-#SetHeapSize(int(1e7))
+SetHeapSize(int(1e7))
 
 one = CoefficientFunction(1)
 minus = CoefficientFunction(-1.0)
@@ -99,55 +99,89 @@ fs2 = H1(mesh, order=3,complex=True)  		        # u, w, deg p+1
 fs3 = HDiv(mesh, order=2,complex=True, orderinner=1) 	# q, r, deg p
 fs = FESpace([fs1,fs2,fs3], complex=True)
 
-#  G(w,r,w)     = - <g, r.n - ik w> 
 lf = LinearForm(fs)
-lf.components[2] += LFI("neumannhdiv", coef=minusg) # -<g,r.n>
-lf.components[1] += LFI("neumann", coef=minusgik)   # +<g,ik*wh> = -<g*ik,wh>
-
-#   LHS: We use standard and DPG integrators to make the
-#   composite sesquilinear form
-#    a( e,u,q,uh ; v,w,r,wh )  
-#          = Y(e;v) + b(u,q; v)
-#                   + conj( b(w,r; e) +  c(w,r ; u,q) ).
-
-lf.Assemble()
 dpg = BilinearForm(fs, linearform=lf, symmetric=False, eliminate_internal=True)
 
-#  b(u,q; v)    = (grad u, grad v) - k*k*(u,v) - <<q.n, v>> 
-dpg += BFI("gradgrad", coef=[2,1,one])          # (grad u, grad v)
-dpg += BFI("eyeeye", coef=[2,1,minusksqr])      # - k*k (u, v)
-dpg += BFI("flxtrc", coef=[3,1,minus])          # - <<q.n, v>>
+symbolic = False
 
-#  c(u,q; w,r)  = - <q.n - ik u, r.n - ik w> 
-dpg += BFI("flxflxbdry", coef=[3,3,minus])      # - <q.n, r.n>
-dpg += BFI("flxtrcbdry", coef=[3,2,minusik])    # + <q.n, ik w> = <-ik q.n, w>
-dpg += BFI("trctrcbdry", coef=[2,2,minusksqr])  # - <ik u, ik w>
-# what about < ik u, r.n > ?  
+if symbolic:  # fails to update preconditioner - singular 
+    # although matrix spot-checks pretty close to nonsymbolic version
+    e,u,q = fs.TrialFunction()
+    v,w,r = fs.TestFunction()
+    n = specialcf.normal(mesh.dim)
+    lf+= SymbolicLFI(minusg*r.Trace()*n, BND)
+    lf+= SymbolicLFI(minusgik*w, BND) 
 
-#  Y(e,v)       = (grad e, grad v) + k*k (e,v)
-dpg.components[0] += BFI("laplace", coef=one)   # (grad e, grad v)
-dpg.components[0] += BFI("mass", coef=ksqr)     # k*k (e, v)
+    dpg += SymbolicBFI(grad(u) * grad(v))
+    dpg += SymbolicBFI(minusksqr*u*v)
+    dpg += SymbolicBFI(-(q*n)*v, element_boundary=True)
 
+    dpg += SymbolicBFI(-(q.Trace()*n)*(r.Trace()*n), BND)
+    dpg += SymbolicBFI(minusik*(q.Trace()*n)*w, BND)
+    dpg += SymbolicBFI(minusksqr*u*w, BND)
+    # This has the same effect as dpg.components[0]+= Laplace(1.0)
+    dpg += SymbolicBFI(grad(e) * grad(v))    
+    # This has the same effect as dpg.components[0] += Mass(ksqr) 
+    dpg += SymbolicBFI(ksqr*e*v)
+
+
+else:   
+    #  G(w,r,w)     = - <g, r.n - ik w> 
+    lf.components[2] += LFI("neumannhdiv", coef=minusg) # -<g,r.n>
+    lf.components[1] += LFI("neumann", coef=minusgik)   # +<g,ik*wh> = -<g*ik,wh>
+
+    #   LHS: We use standard and DPG integrators to make the
+    #   composite sesquilinear form
+    #    a( e,u,q,uh ; v,w,r,wh )  
+    #          = Y(e;v) + b(u,q; v)
+    #                   + conj( b(w,r; e) +  c(w,r ; u,q) ).
+
+
+    #  b(u,q; v)    = (grad u, grad v) - k*k*(u,v) - <<q.n, v>> 
+    dpg += BFI("gradgrad", coef=[2,1,one])          # (grad u, grad v)
+    dpg += BFI("eyeeye", coef=[2,1,minusksqr])      # - k*k (u, v)
+    dpg += BFI("flxtrc", coef=[3,1,minus])          # - <<q.n, v>>
+
+    #  c(u,q; w,r)  = - <q.n - ik u, r.n - ik w> 
+    dpg += BFI("flxflxbdry", coef=[3,3,minus])      # - <q.n, r.n>
+    dpg += BFI("flxtrcbdry", coef=[3,2,minusik])    # + <q.n, ik w> = <-ik q.n, w>
+    dpg += BFI("trctrcbdry", coef=[2,2,minusksqr])  # - <ik u, ik w> 
+    # what about < ik u, r.n > ?  
+
+    #  Y(e,v)       = (grad e, grad v) + k*k (e,v)
+    dpg.components[0] += BFI("laplace", coef=one)   # (grad e, grad v)
+    dpg.components[0] += BFI("mass", coef=ksqr)     # k*k (e, v)
+
+lf.Assemble()
+dpg.Assemble()
 # Solve iteratively:
+print("assembled ok")
 euq = GridFunction(fs)
-
-#c = Preconditioner(dpg, type="bddc")  # pretty rough looking
-c = Preconditioner(dpg, type="direct") #reasonable looking solution L2 error about the same as for pde
-#c = Preconditioner(dpg, type="local") # pretty rough looking, maybe better than vertexschwarz
 #c = Preconditioner(dpg, type="vertexschwarz", addcoarse=True) # pretty rough, but better than without addcoarse
 #c = Preconditioner(dpg, type="vertexschwarz") # pretty rough looking solution
-dpg.Assemble()
+c = Preconditioner(dpg, type="direct") #reasonable looking solution L2 error about the same as for pde
+#c = Preconditioner(dpg, type="local") # pretty rough looking, maybe better than vertexschwarz
+print("updating preconditioner")
 c.Update()
 
-# segfaults after constructor "cg solve for complex system"
-# BVP didn't like innerproduct or solver kwargs
-#n2 = BVP(bf=dpg, lf=lf, gf=euq, pre=c, solver="cg", innerproduct="hermitean",
-#BVP(bf=dpg, lf=lf, gf=euq, pre=c, prec=1.e-10, maxsteps=1000).Do()
-inv = CGSolver(dpg.mat, c.mat, precision=1.e-10, maxsteps=1000)  # increasing precision to 1.e-16 didn't change anything
-lf.vec.data += dpg.harmonic_extension_trans * lf.vec
-euq.vec.data = inv * lf.vec
-euq.vec.data += dpg.harmonic_extension * euq.vec
-euq.vec.data += dpg.inner_solve * lf.vec
+print("solving")
+#method = "bvp"
+method = "solversCG"
+#method = "explicit"
+
+# solutions using bvp and explicit are identical
+# soluction using solversCG is not too bad
+if method=="bvp":
+    # BVP didn't like innerproduct or solver kwargs
+    BVP(bf=dpg, lf=lf, gf=euq, pre=c, prec=1.e-10, maxsteps=1000).Do()
+elif method=="solversCG":  
+    solvers.CG(mat=dpg.mat, pre=c.mat, rhs=lf.vec, sol=euq.vec, tol=1.e-10, maxsteps=1000,printrates=True)
+else:
+    inv = CGSolver(dpg.mat, c.mat, precision=1.e-10, maxsteps=1000)  # increasing precision to 1.e-16 didn't change anything
+    lf.vec.data += dpg.harmonic_extension_trans * lf.vec
+    euq.vec.data = inv * lf.vec
+    euq.vec.data += dpg.harmonic_extension * euq.vec
+    euq.vec.data += dpg.inner_solve * lf.vec
 
 # Compute error
 uu = GridFunction(fs2)

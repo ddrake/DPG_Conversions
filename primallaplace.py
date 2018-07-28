@@ -56,44 +56,70 @@ fs2 = HDiv(mesh, order=p, orderinner=1)
 fs3 = L2(mesh, order=p+2)	
 fs = FESpace([fs1,fs2,fs3])
 
-print("mesh boundaries", mesh.GetBoundaries())
-# Forms: Specify a dpg integrator operating on component 
-# spaces I and J as:   <integrator name> <I> <J> <coeff>.
-dpg = BilinearForm(fs, symmetric=True, eliminate_internal=True)
 # The coef list expects:
 # space indices (1-based) for trial fn, test fn, coefficient function
 # dpg.components is 0-based
-dpg += BFI("gradgrad", coef=[1,3,one])          # (grad u, grad v) + transpose 
-dpg += BFI("flxtrc", coef=[2,3,minus])          # - << q.n, v >>   + transpose
-dpg += BFI("eyeeye", coef=[1,3,one])            # (u,v)            + transpose 
-dpg.components[2] += BFI("laplace", coef=one)   # (grad e, grad v)
-dpg.components[2] += BFI("mass", coef=one)      # (e,v) 
+symbolic = True
 
+dpg = BilinearForm(fs, symmetric=True, eliminate_internal=True)
 lf = LinearForm(fs)
-lf.components[2] += LFI("source", coef=f)  # 0-based index
+# H1, H(div), L2
+if symbolic:
+    u,q,e = fs.TrialFunction()
+    w,r,v = fs.TestFunction()
+
+    n = specialcf.normal(mesh.dim)
+
+    dpg += SymbolicBFI(grad(u) * grad(v) + grad(e) * grad(w))
+    dpg += SymbolicBFI(q*n*v, element_boundary=True)
+    dpg += SymbolicBFI(e*r*n, element_boundary=True)
+    dpg += SymbolicBFI(u*v + w*e)
+    # This has the same effect as dpg.components[2]+= Laplace(1.0)
+    dpg += SymbolicBFI(grad(e) * grad(v))   
+    # This has the same effect as dpg.components[2] += Mass(1.0) 
+    dpg += SymbolicBFI(e*v)
+
+    lf+= SymbolicLFI(f*v)
+else:
+    # Forms: Specify a dpg integrator operating on component 
+    # spaces I and J as:   <integrator name> <I> <J> <coeff>.
+    dpg += BFI("gradgrad", coef=[1,3,one])          # (grad u, grad v) + transpose 
+    dpg += BFI("flxtrc", coef=[2,3,minus])          # - << q.n, v >>   + transpose
+    dpg += BFI("eyeeye", coef=[1,3,one])            # (u,v)            + transpose 
+    dpg.components[2] += BFI("laplace", coef=one)   # (grad e, grad v)
+    dpg.components[2] += BFI("mass", coef=one)      # (e,v) 
+
+    lf.components[2] += LFI("source", coef=f)       # (f,v)
 
 ## Solve:  After static condensation, the DPG system is guaranteed 
 ## to be symmetric and positive definite, so we use CG to solve. 
 uqe = GridFunction(fs)
 
 c = Preconditioner(dpg,type="local") 
-#c.Update()
+# c = Preconditioner(dpg,type="bddc") # doesn't converge
 # If you want to use a direct solver instead, use this:
 # c = Preconditioner(dpg, type="direct")
 
-# the output of this procedure matches the pde output exactly for 
-# steps 0 - 18, but the outputs don't match for steps 19 - 21
-#n2 = BVP(bf=dpg, lf = lf, gf = uqe, pre=c, prec=1.e-10, maxsteps=1000).Do()
 dpg.Assemble()
 lf.Assemble()
-# I'm not sure if we can replace CGSolver by solvers.CG here
-# solvers.CG requires the right hand side vector which CGSolver does not.
-# It's not clear whether solvers.CG does the static condensation steps.
-inv = CGSolver(dpg.mat, c.mat, precision=1.e-10, maxsteps=1000)
-lf.vec.data += dpg.harmonic_extension_trans * lf.vec
-uqe.vec.data = inv * lf.vec
-uqe.vec.data += dpg.harmonic_extension * uqe.vec
-uqe.vec.data += dpg.inner_solve * lf.vec
+
+method = "bvp"
+#method = "solversCG"
+#method = "explicit"
+
+if method=="bvp":
+    BVP(bf=dpg, lf=lf, gf=uqe, pre=c, prec=1.e-10, maxsteps=1000).Do()
+elif method=="solversCG":  
+    # This gives a zero solution (and doesn't print rates)
+    # if eliminate_internal is set for the bilinear form
+    # if eliminate_internal is not set, it 'works' but blows up. 
+    solvers.CG(mat=dpg.mat, pre=c.mat, rhs=lf.vec, sol=uqe.vec, tol=1.e-10, maxsteps=1000,printrates=True)
+else:
+    inv = CGSolver(dpg.mat, c.mat, precision=1.e-10, maxsteps=1000)
+    lf.vec.data += dpg.harmonic_extension_trans * lf.vec
+    uqe.vec.data = inv * lf.vec
+    uqe.vec.data += dpg.harmonic_extension * uqe.vec
+    uqe.vec.data += dpg.inner_solve * lf.vec
 
 u = uqe.components[0]
 q = uqe.components[1]
