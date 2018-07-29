@@ -52,7 +52,9 @@ f = CoefficientFunction( 2*x*(1-x)+2*y*(1-y) + uex )
 p = 3 
 # this mesh has only one boundary: 1='default'
 fs1 = H1(mesh, order=p+1, dirichlet=[1])
-fs2 = HDiv(mesh, order=p, orderinner=1)
+fs2 = HDiv(mesh, order=p, orderinner=1)	 # 'undocumented' keyword
+#fs2 = HDiv(mesh, order=p)	
+#fs2.SetOrder(element_type=TRIG, order=1)  # this is NOT the same as orderinner=1!!
 fs3 = L2(mesh, order=p+2)	
 fs = FESpace([fs1,fs2,fs3])
 

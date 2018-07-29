@@ -84,35 +84,71 @@ minusgik = CoefficientFunction([(1j*k*1j*(k1+k)*ex), (1j*k*1j*(k2+k)*ex),
 f = CoefficientFunction(0.0)
 
 # finite element spaces                              (p = 0,1,2,...)
-fs1 = L2(mesh, order=6,complex=True) 		# e, v, deg p+2
-fs2 = H1(mesh, order=5,complex=True) 		# u, w, deg p+1
-fs3 = HDiv(mesh, order=4,complex=True,
-	orderinner=1)  		# q, r, deg p 
+fs1 = L2(mesh, order=6, complex=True) 		# e, v, deg p+2
+fs2 = H1(mesh, order=5, complex=True) 		# u, w, deg p+1
+fs3 = HDiv(mesh, order=4, complex=True,
+	orderinner=1)  		# q, r, deg p
+# orderinner is undocumented.  fs3.SetOrder(element_type=TET, order=1) is not equivalent
 fs = FESpace([fs1,fs2,fs3], complex=True)
 
 # forms 
 lf = LinearForm(fs)
-lf.components[0] += LFI("source", coef=f)
-lf.components[2] += LFI("neumannhdiv", coef=minusg)  	# -<g,r.n>
-lf.components[1] += LFI("neumann", coef=minusgik) 	# +<g,ik*wh> = -<g*ik,wh>
-
-# We need to make the sesquilinearform
-#  a( e,u,q,uh ; v,w,r,wh ) = 
-#   Y(e;v)  +  b(u,q,uh; v) + conj( b(w,r,wh; e) +  c(w,r,wh ; u,q,uh) )
 
 # The symmetric=False option is necessary for Hermitian too.
-dpg = BilinearForm(fs, symmetric=False, linearform=lf, eliminate_internal=True)
-dpg += BFI("gradgrad", 		coef=[2,1,one]) 	# (grad u, grad v)
-dpg += BFI("eyeeye", 		coef=[2,1,minusksqr])	# - k*k*(u,v) 
-dpg += BFI("flxtrc", 		coef=[3,1,minus])	# - <<q.n, v>> 
-dpg += BFI("flxflxbdry", 	coef=[3,3,minus])	# - <q.n, r.n>
-dpg += BFI("flxtrcbdry", 	coef=[3,2,minusik])	# + <q.n, ik w>
-dpg += BFI("trctrcbdry", 	coef=[2,2,minusksqr])	# - <ik u, ik w> 
-dpg.components[0] += BFI("laplace", coef=one)
-dpg.components[0] += BFI("mass", coef=ksqr)
+# linearform is an undocumented keyword
+#dpg = BilinearForm(fs, symmetric=False, linearform=lf, eliminate_internal=True)
+dpg = BilinearForm(fs, symmetric=False, eliminate_internal=True)
+
+symbolic=False
+if symbolic:
+    # Very different behavior from pde or nonsymbolic
+    e,u,q = fs.TrialFunction()
+    v,w,r = fs.TestFunction()
+
+    n = specialcf.normal(mesh.dim)
+
+    lf+= SymbolicLFI(f*v)
+    lf+= SymbolicLFI(minusg*r.Trace()*n, BND)
+    lf+= SymbolicLFI(minusgik*w, BND) 
+
+    dpg += SymbolicBFI(grad(u) * grad(v))
+    dpg += SymbolicBFI(minusksqr*u*v)
+    dpg += SymbolicBFI(-(q*n)*v, element_boundary=True)
+
+    dpg += SymbolicBFI(-(q.Trace()*n)*(r.Trace()*n), BND)
+    dpg += SymbolicBFI(minusik*(q.Trace()*n)*w, BND)
+    dpg += SymbolicBFI(minusksqr*u*w, BND)
+    # This has the same effect as dpg.components[0]+= Laplace(1.0)
+    dpg += SymbolicBFI(grad(e) * grad(v))    
+    # This has the same effect as dpg.components[0] += Mass(ksqr) 
+    dpg += SymbolicBFI(ksqr*e*v)
+
+else:
+    # behaves similarly to the pde, but solution is different (incorrect)
+    lf.components[0] += LFI("source", coef=f)
+    lf.components[2] += LFI("neumannhdiv", coef=minusg)  	# -<g,r.n>
+    lf.components[1] += LFI("neumann", coef=minusgik) 	# +<g,ik*wh> = -<g*ik,wh>
+
+    # We need to make the sesquilinearform
+    #  a( e,u,q,uh ; v,w,r,wh ) = 
+    #   Y(e;v)  +  b(u,q,uh; v) + conj( b(w,r,wh; e) +  c(w,r,wh ; u,q,uh) )
+
+    dpg += BFI("gradgrad", 		coef=[2,1,one]) 	# (grad u, grad v)
+    dpg += BFI("eyeeye", 		coef=[2,1,minusksqr])	# - k*k*(u,v) 
+    dpg += BFI("flxtrc", 		coef=[3,1,minus])	# - <<q.n, v>> 
+    dpg += BFI("flxflxbdry", 	coef=[3,3,minus])	# - <q.n, r.n>
+    dpg += BFI("flxtrcbdry", 	coef=[3,2,minusik])	# + <q.n, ik w>
+    dpg += BFI("trctrcbdry", 	coef=[2,2,minusksqr])	# - <ik u, ik w> 
+    dpg.components[0] += BFI("laplace", coef=one)
+    dpg.components[0] += BFI("mass", coef=ksqr)
 
 # solve:
 euqf = GridFunction(fs)
+
+lf.Assemble()
+dpg.Assemble()
+# Solve iteratively:
+print("assembled ok")
 
 #c = Preconditioner(dpg, type="direct")
 #c = Preconditioner(dpg, type="local")
@@ -131,7 +167,7 @@ BVP(bf=dpg, lf=lf, gf=euqf, pre=c, prec=1.e-10, maxsteps=1000).Do()
 
 
 uu = GridFunction(fs2)
-uu = euq.components[1]
+uu = euqf.components[1]
 absL2error = sqrt(Integrate( (uu-ex) * Conj(uu-ex), mesh, order=10))
 print("absL2error: ", absL2error)
 #gridfunction uu -fespace=fs2 -addcoef 

@@ -100,7 +100,9 @@ fs3 = HDiv(mesh, order=2,complex=True, orderinner=1) 	# q, r, deg p
 fs = FESpace([fs1,fs2,fs3], complex=True)
 
 lf = LinearForm(fs)
-dpg = BilinearForm(fs, linearform=lf, symmetric=False, eliminate_internal=True)
+# linearform is undocumented - I don't think we need to do it this way - solution is the same
+#dpg = BilinearForm(fs, linearform=lf, symmetric=False, eliminate_internal=True)
+dpg = BilinearForm(fs, symmetric=False, eliminate_internal=True)
 
 symbolic = False
 
@@ -123,7 +125,6 @@ if symbolic:  # fails to update preconditioner - singular
     dpg += SymbolicBFI(grad(e) * grad(v))    
     # This has the same effect as dpg.components[0] += Mass(ksqr) 
     dpg += SymbolicBFI(ksqr*e*v)
-
 
 else:   
     #  G(w,r,w)     = - <g, r.n - ik w> 
@@ -165,8 +166,8 @@ print("updating preconditioner")
 c.Update()
 
 print("solving")
-#method = "bvp"
-method = "solversCG"
+method = "bvp"
+#method = "solversCG"
 #method = "explicit"
 
 # solutions using bvp and explicit are identical

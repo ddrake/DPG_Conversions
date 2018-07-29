@@ -5,6 +5,7 @@ from netgen.geom2d import SplineGeometry
 from math import pi
 from numpy import log
 from ctypes import CDLL
+import ngsolve.internal as ngint
 
 libDPG = CDLL("../libDPG.so")
 
@@ -22,28 +23,51 @@ f = CoefficientFunction( (1+1j)*exp( -100.0*(x*x+y*y) ) )
 # Compound finite element space:
 p = 3
 fs1 = H1(mesh, order=p+1, dirichlet=[1], complex=True)
-fs2 = HDiv(mesh, order=p, complex=True, orderinner=1)	
+#fs2 = HDiv(mesh, order=p, complex=True, orderinner=1)	
+fs2 = HDiv(mesh, order=p, complex=True)	
+fs2.SetOrder(element_type=TRIG, order=1)
 fs3 = L2(mesh, order=p+2, complex=True)	
 
 fs = FESpace([fs1,fs2,fs3], complex=True)
 
 # Forms:
 dpg = BilinearForm(fs, eliminate_internal=True)
-dpg += BFI("gradgrad", coef=[1,3,lam])          # (grad u, grad v) + Hermitian transpose 
-dpg += BFI("flxtrc", coef=[2,3,minus])          # - << q.n, v >>   + Hermitian transpose
-dpg.components[2] += BFI("laplace", coef=one)  	# (grad e, grad v)
-dpg.components[2] += BFI("mass", coef=one)    	# (e,v) 
-
 lf = LinearForm(fs)
-lf.components[2] += LFI("source", coef=f)
+
+symbolic = False
+# H1, H(div), L2
+if symbolic:
+    u,q,e = fs.TrialFunction()
+    w,r,v = fs.TestFunction()
+
+    n = specialcf.normal(mesh.dim)
+    
+    # how to get hermitian transpose?
+    dpg += SymbolicBFI(grad(u) * grad(v) + grad(e) * grad(w))
+    dpg += SymbolicBFI(q*n*v, element_boundary=True)
+    dpg += SymbolicBFI(e*r*n, element_boundary=True)
+    # dpg += SymbolicBFI(u*v + w*e) no eyeeye term -- why not?
+    # This has the same effect as dpg.components[2]+= Laplace(1.0)
+    dpg += SymbolicBFI(grad(e) * grad(v))   
+    # This has the same effect as dpg.components[2] += Mass(1.0) 
+    dpg += SymbolicBFI(e*v)
+
+    lf+= SymbolicLFI(f*v)
+else:
+    dpg += BFI("gradgrad", coef=[1,3,lam])          # (grad u, grad v) + Hermitian transpose 
+    dpg += BFI("flxtrc", coef=[2,3,minus])          # - << q.n, v >>   + Hermitian transpose
+    dpg.components[2] += BFI("laplace", coef=one)  	# (grad e, grad v)
+    dpg.components[2] += BFI("mass", coef=one)    	# (e,v) 
+
+    lf.components[2] += LFI("source", coef=f)
 
 uqe = GridFunction(fs)
 
 c = Preconditioner(dpg, type="direct")
 
 def Solve():
-    fes.Update()
-    uqe.Update()
+    #fes.Update()
+    #uqe.Update()
     dpg.Assemble()
     lf.Assemble()
     inv = CGSolver(dpg.mat, c.mat, precision=1.e-10, maxsteps=1000)
@@ -73,7 +97,9 @@ def CalcError():
     for el in mesh.Elements():
         mesh.SetRefinementFlag(el, eta2[el.nr] > 0.25*maxerr)
 
-
+Solve()
+Draw(uqe[0],mesh=mesh, name='gfu')
+ngint.visoptions.subdivisions=4
 #def CalcError():
 	# todo: ??
 
